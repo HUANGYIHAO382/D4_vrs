@@ -1,95 +1,110 @@
-# D4 视觉中枢（HSV 掩膜）
+# D4 自动善变识别
 
-游戏内染色掉落物 + HSV 纯色掩膜，将屏幕 ROI 内的目标识别为屏幕坐标 `(screen_x, screen_y)`。本阶段只做「眼」，不含点击、寻路、打怪。
+从暗黑4 善变界面截图中，自动识别背包里**需要善变**的物品，排除**已善变**和**空格**，并在待善变格子上生成半透明遮罩与编号。
+
+当前阶段只做**识别 + 可视化标记**（截图测试），不含自动点击循环。
+
+## 功能说明
+
+1. **裁剪背包区域**：按 `config.yaml` 中的 `inventory_monitor` 从整屏截图裁出右下戒指栏。
+2. **自动对齐网格**：`InventoryGridDetector` 用亮度投影 comb 拟合 11×3 格子坐标，避免固定间距带来的逐格漂移。
+3. **逐格分类**：
+   - `empty`：空格（近黑）
+   - `done`：已善变（格子底部中央有骰子/猫头鹰小图标）
+   - `pending`：待善变（有物品且无完成标志）
+4. **输出遮罩图**：仅对 `pending` 叠加绿色半透明遮罩、绿框、序号。
 
 ## 环境
 
-- Python 3.10+
-- Windows，游戏在前台；默认 **1920×1080**，ROI 为屏幕中央 800×800
+- Python 3.9+
+- Windows（路径含中文截图时需本项目自带的 `image_io` 读写）
+- 参考分辨率：**3840×2160** 善变界面（其它分辨率需重标 `config.yaml`）
 
 ```bash
-cd e:\D4_OCR_PR
+cd E:\D4_OCR_PR
 pip install -r requirements.txt
 ```
 
-## 前置条件
+依赖：`opencv-python`、`numpy`、`pyyaml`（`mss` 预留给后续实时截屏，当前截图测试可不装）。
 
-1. 在游戏设置里把目标掉落物（如源生粉尘）改成单一高对比色（荧光洋红、青色等）。
-2. 窗口模式或无边框全屏，避免 ROI 裁到黑边。
-3. 游戏在主显示器时，`config.yaml` 中 `monitor.left/top` 一般无需改；副屏需加上显示器偏移。
+## 快速开始
 
-## 使用流程
-
-### 1. HSV 标定（必须先做）
-
-```bash
-python tools/hsv_picker.py
-```
-
-- 把游戏画面放在 ROI 内，地上要有染色掉落物。
-- 拖动 **H_min / S_min / V_min / H_max / S_max / V_max**，直到 **Mask** 窗口里目标为连贯白块、背景几乎全黑。
-- 按 **s** 保存到 `config.yaml`；**p** 在终端打印数组；**q** 退出。
-
-**色相环绕**：目标接近红色时，H 可能在 0 与 170 两端；本工具仅支持单段 `inRange`，可放宽 H 范围或换一种染色。
-
-### 2. 运行视觉管线
+将测试截图放到 `samples/`（例如 `samples/善变截图.png`），然后：
 
 ```bash
 python main.py
 ```
 
-- 绿框 + 红点标出当前**面积最大**的目标。
-- 终端输出 ROI 局部坐标与屏幕绝对坐标。
-- **q** 退出。
+或指定图片：
 
-`config.yaml` 中 `debug: false` 可关闭 `imshow` 以提升 FPS（仍打印日志）。
+```bash
+python main.py samples/你的截图.png
+```
 
-## 配置说明
+终端会打印：网格拟合结果、待善变数量、每个物品的行列与屏幕坐标。
 
-| 字段 | 说明 |
+输出目录 `samples/output/`：
+
+| 文件 | 说明 |
 |------|------|
-| `monitor` | mss ROI：`top`, `left`, `width`, `height` |
-| `lower_hsv` / `upper_hsv` | OpenCV HSV 阈值（H:0–179, S/V:0–255） |
-| `min_area` | 轮廓最小面积（像素²），过滤噪点 |
-| `kernel_size` / `dilate_iterations` | 掩膜膨胀，粘连物品名字底板 |
-| `debug` | 是否显示调试窗口 |
-| `log_interval_frames` | 每隔多少帧打印一次坐标与耗时 |
+| `*_overlay.png` | 待善变物品绿色遮罩 + 编号（主结果） |
+| `*_grid.png` | 网格对齐与逐格分类（绿=P 待善变，红=D 已善变，灰=E 空格） |
+| `*_mask.png` | 二值遮罩 |
+| `*_full.png` | 全屏标注（背包 ROI 黄框 + overlay） |
 
-## 验收清单（游戏内实机）
+## 配置说明（`config.yaml`）
 
-| 项 | 标准 |
-|----|------|
-| 掩膜干净度 | Mask 中目标为整块白，UI/地面无大块误检 |
-| 红点稳定性 | 同一件掉落物 3–5 秒内中心抖动约 &lt; 5px |
-| 坐标正确性 | 红点落在名称/光柱视觉中心；屏幕坐标抽查合理 |
-| 性能 | ROI 800×800 单循环宜 &lt; 30ms |
-| 配置复用 | 只改 yaml 即可调 `min_area`、形态学、HSV |
+| 段 | 关键字段 | 说明 |
+|----|----------|------|
+| `inventory_monitor` | left/top/width/height | 背包裁剪区（全屏坐标） |
+| `inventory_grid` | cols/rows, x0/y0, pitch_x/pitch_y | 网格锚点；`auto_detect: true` 时自动拟合精确坐标 |
+| `occupied` | value_mean, bright_ratio | 判断格子是否有物品 |
+| `done_marker` | region, x_center, lower/upper_hsv, pixel_ratio | 已善变标志（底部中央小图标）检测 |
+| `clicks` / `delays_ms` | — | 预留给后续自动点击，当前未使用 |
 
-## 常见问题
-
-- **误检多**：收紧 `S_min`/`V_min`，或增大 `min_area`。
-- **目标断裂**：略增 `dilate_iterations` 或 `kernel_size`。
-- **漏检**：放宽 H/S/V 范围，或确认游戏内染色已生效。
-- **ROI 不对**：按分辨率重算中央区域，修改 `monitor`。
+换分辨率或界面布局时，把 `inventory_grid` 的 `x0/y0/pitch` 大致改对即可，`auto_detect` 会在锚点附近自动对齐。
 
 ## 目录结构
 
 ```
 D4_OCR_PR/
-  config.yaml
+  config.yaml                 # 善变识别配置
+  main.py                     # 入口（默认跑 samples/善变截图.png）
   requirements.txt
-  main.py
+  scripts/
+    test_transmute_image.py   # 截图测试脚本
   src/
-    capture.py      # mss 截屏
-    vision.py       # HSV 掩膜与轮廓
-    coords.py       # 坐标换算
-    config_utils.py # 配置读写
-  tools/
-    hsv_picker.py   # HSV 标定
+    config.py                 # 配置读写
+    image_io.py               # 中文路径图像读写
+    inventory_grid.py         # 背包网格识别（通用，可复用）
+    detector.py               # 善变逐格分类 + 遮罩
+    coords.py                 # ROI → 屏幕坐标
+  samples/                    # 测试截图（*.png 默认不上传 Git）
+  docs/                       # 本地设计文档（默认不上传 Git）
 ```
 
-## 后续扩展（未实现）
+## 模块分层
 
-1. 屏幕坐标 → 外设/Win32 点击  
-2. 多目标优先级与拾取重试  
-3. 寻路/站位（与视觉解耦）
+- **通用层** `inventory_grid.py`：只负责把背包解析成精确格子坐标，与业务无关。
+- **业务层** `detector.py`：在格子上做占用 / 已善变 / 待善变判断，并生成遮罩。
+
+其它功能（如识别太古词缀）可复用 `InventoryGridDetector`，单独新增判定模块即可。
+
+## 验收参考（样张 `善变截图.png`）
+
+- 网格 11×3 与装备栏对齐，右侧无累积漂移
+- 待善变格有绿色遮罩与连续编号
+- 底部带完成图标的格子不被标记
+- 空格不标记
+
+## 后续计划（未实现）
+
+- 实时截屏 + 自动点击善变循环（放入 → 善变 → 清除 → 重扫）
+- 太古词缀（武器小太阳）识别
+
+## 常见问题
+
+- **网格整体偏移**：调整 `inventory_grid` 的 `x0/y0`，保持 `auto_detect: true`。
+- **已善变误判/漏判**：调 `done_marker.pixel_ratio` 或 `region` / `x_center` 取样条带。
+- **空格被判成有物品**：提高 `occupied.value_mean` 或 `bright_ratio`。
+- **中文路径读图失败**：确认使用本项目 `image_io.imread_unicode`，不要直接用 `cv2.imread`。
