@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# IDE / 编辑器
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+
+# 环境变量与密钥（切勿上传）
+.env
+.env.*
+*.pem
+
+# 本地设计文档（不上传 GitHub，仅本地保留）
+docs/
+
+# 测试截图与生成输出（体积大、可本地重跑生成）
+samples/*.png
+samples/output/
+
+# 离线安装 wheel 包（用 requirements.txt + pip 安装即可）
+wheels/
+
+# UI 临时预览文件
+ui/_*.ppm
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,54 @@
+# D4 自动善变配置（3840x2160 善变界面参考值，请按实机标定）
+
+# 右下背包格区域（仅戒指栏，不含上方装备）
+inventory_monitor:
+  left: 2362
+  top: 1283
+  width: 1402
+  height: 766
+
+# 背包网格几何（均为裁剪区局部坐标，单位像素）
+# auto_detect=true 时，下面的固定值仅作为"搜索锚点 + 自动失败时的回退"，
+# 实际格子坐标由 InventoryGridDetector 用亮度投影 comb 拟合得到（无累积漂移）。
+inventory_grid:
+  cols: 11
+  rows: 3
+  x0: 177        # 第一个格子左边缘（跳过左侧面板边框）
+  y0: 166        # 第一行格子上边缘（跳过 "装备" 标题行）
+  pitch_x: 110   # 列间距
+  pitch_y: 162   # 行间距
+  cell_w: 100    # 单格宽
+  cell_h: 153    # 单格高
+  cell_pad: 8    # 取样时再向内收缩，避开亮边框
+  auto_detect: true     # 是否自动对齐网格（推荐）
+  value_thresh: 52      # 卡片亮度阈值（V>该值视为卡片像素）
+  auto_min_score: 0.40  # 自动拟合覆盖率低于该值时回退到固定几何
+
+# 占用判定：格子中心区域平均亮度高于阈值视为有物品（空格近黑）
+occupied:
+  value_mean: 45      # 平均 V
+  bright_ratio: 0.12  # V>80 像素比
+
+# 已善变标志（格子底部中央的骰子/猫头鹰小图标）
+done_marker:
+  region: 0.18           # 取格子底部 18% 高度
+  x_center: [0.28, 0.72] # 仅取水平中央区段，避开金属戒指主体
+  lower_hsv: [0, 0, 120]
+  upper_hsv: [179, 110, 255]
+  pixel_ratio: 0.06      # 条带内亮像素比超过此值判为已善变
+
+min_area: 800
+max_area: 12000
+kernel_size: 3
+dilate_iterations: 0
+
+clicks:
+  transmute: [1200, 700]
+  clear: [1300, 700]
+
+delays_ms:
+  after_pick: 250
+  after_transmute: 700
+  after_clear: 450
+  between_items: 350
+  countdown_sec: 3
